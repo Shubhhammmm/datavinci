@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Nested Checkbox Tree</title>
+  <style>
+    ul { list-style: none; padding-left: 1em; }
+    li { margin: 0.3em 0; }
+  </style>
+</head>
+<body>
+  <h2>Nested Checkbox Tree</h2>
+  <label><input type="checkbox" id="selectAll"> Select All</label>
+  <div id="treeContainer"></div>
+  <p>Checked leaf nodes: <span id="checkedCount">0</span></p>
+
+  <script>
+    const data = [
+      { id: "1", label: "Fruits", children: [
+          { id: "1-1", label: "Apples",  children: [] },
+          { id: "1-2", label: "Oranges", children: [] }
+      ]},
+      { id: "2", label: "Vegetables", children: [
+          { id: "2-1", label: "Carrots", children: [] },
+          { id: "2-2", label: "Peas",    children: [] }
+      ]}
+    ];
+
+    const container    = document.getElementById('treeContainer');
+    const selectAllBox = document.getElementById('selectAll');
+    const countSpan    = document.getElementById('checkedCount');
+
+    function renderTree(items) {
+      const ul = document.createElement('ul');
+      items.forEach(item => {
+        const li = document.createElement('li');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.dataset.id = item.id;
+
+        const lbl = document.createElement('label');
+        lbl.textContent = item.label;
+        lbl.prepend(cb);
+
+        if (item.children.length) {
+          li.append(lbl, renderTree(item.children));
+        } else {
+          li.append(lbl);
+        }
+
+        cb.addEventListener('change', () => {
+          cascadeDown(cb, cb.checked);
+          updateAncestors(cb);
+          updateSelectAllState();
+          updateLeafCount();
+        });
+
+        ul.appendChild(li);
+      });
+      return ul;
+    }
+
+    // —— BUG #1 ——
+  // This only grabs the <label> instead of the wrapping <li>, so deep children never get toggled.
+    function cascadeDown(box, isChecked) {
+      const li = box.closet('li');  
+      li.querySelectorAll('input[type="checkbox"]').forEach(childCb => {
+        childCb.checked = isChecked;
+        childCb.indeterminate = false;
+      });
+    }
+
+    function updateAncestors(box) {
+      const parentUl = box.closest('ul').parentElement.closest('ul');
+      if (!parentUl) return;
+
+      const parentLi = box.closest('ul').parentElement;
+      const parentCb = parentLi.querySelector('input[type="checkbox"]');
+      const children  = parentLi.querySelectorAll(':scope > ul input[type="checkbox"]');
+
+      const allChecked  = [...children].every(c => c.checked);
+      const noneChecked = [...children].every(c => !c.checked);
+
+      parentCb.checked = allChecked;
+      parentCb.indeterminate = !allChecked && !noneChecked;
+
+      updateAncestors(parentCb);
+    }
+
+    // —— BUG #2 ——
+    // After toggling every box, we never re-sync the master’s own indeterminate state.
+    selectAllBox.addEventListener('change', () => {
+      const treeCheckboxes = container.querySelectorAll('input[type="checkbox"]');
+      treeCheckboxes.forEach(cb => {
+        cb.checked = selectAllBox.checked;
+        cb.indeterminate = false;
+      });
+      updateLeafCount();
+      updateSelectAllState();
+    });
+
+    function updateSelectAllState() {
+      const all     = container.querySelectorAll('input[type="checkbox"]');
+      const checked = container.querySelectorAll('input:checked');
+      selectAllBox.checked     = checked.length === all.length;
+      selectAllBox.indeterminate = checked.length > 0 && checked.length < all.length;
+    }
+
+    function updateLeafCount() {
+      const leaves = Array.from(container.querySelectorAll('li'))
+        .filter(li => !li.querySelector('ul'));
+      const cnt = leaves.filter(li => li.querySelector('input').checked).length;
+      countSpan.textContent = cnt;
+    }
+
+    container.appendChild(renderTree(data));
+    // initial sync
+    updateSelectAllState();
+    updateLeafCount();
+  </script>
+</body>
+</html>
